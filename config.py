@@ -11,8 +11,9 @@ from dotenv import load_dotenv
 # 读取项目根目录的 .env（不存在也不报错），把密钥等运行时配置注入环境变量
 load_dotenv()
 
-# 模型统一缓存目录：所有脚本从这里读模型，避免散落在系统临时目录
-MODEL_DIR = r"F:\models"
+# 模型统一缓存目录：所有脚本从这里读模型，避免散落在系统临时目录。
+# 路径按机器而异，从环境变量读，换电脑只改 .env 即可（默认 E:\models）
+MODEL_DIR = os.getenv("MODEL_DIR", r"E:\models")
 
 # Chroma 本地持久化目录
 DB_PATH = "./chroma_db"

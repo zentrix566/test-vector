@@ -24,12 +24,41 @@
 
 ## 模型存放位置
 
-所有向量模型统一缓存在 `F:\models`（`config.py` 里的 `MODEL_DIR` 常量），避免散落在系统临时目录。首次运行脚本会自动下载到这里，之后离线复用。当前包含：
+所有向量模型统一缓存在 `MODEL_DIR` 指定的目录（默认 `E:\models`），避免散落在系统临时目录。首次运行脚本会自动下载到这里，之后离线复用。当前包含：
 
 - `models--qdrant--all-MiniLM-L6-v2-onnx`（英文，384 维，约 87M）
 - `models--Qdrant--bge-small-zh-v1.5`（中文，512 维，约 91M）
 
-如需换目录，修改 `config.py` 里的 `MODEL_DIR` 即可。
+路径按机器而异，已做成可配置项：换电脑时把 `.env` 里的 `MODEL_DIR` 改成本机目录即可（不配则用默认 `E:\models`）。
+
+### 模型怎么下载到 E 盘
+
+**不需要手动下载**。代码用 `fastembed` 加载模型时传了 `cache_dir=MODEL_DIR`（见 `config.py`），首次构造模型对象就会自动把模型下载并缓存到该目录：
+
+```python
+# embed_local.py / alert_kb.py 里的写法
+model = TextEmbedding(model_name=EN_MODEL, cache_dir=MODEL_DIR)
+```
+
+所以下载到 E 盘只需两步：
+
+1. 配好目录（默认就是 `E:\models`，要换盘就改 `.env` 里的 `MODEL_DIR`，目录不存在会自动创建）：
+
+   ```bash
+   copy .env.example .env
+   ```
+
+2. 运行下载脚本，一次性把项目用到的全部模型拉到 `MODEL_DIR`（需联网，约 80～180MB，之后完全离线复用）：
+
+   ```bash
+   python download_models.py
+   ```
+
+   也可以不专门下载，直接跑任意用到模型的脚本（如 `python embed_local.py`），首次运行会自动下载用到的那个模型。
+
+下载完成后，`E:\models` 下会出现 `models--qdrant--all-MiniLM-L6-v2-onnx`、`models--Qdrant--bge-small-zh-v1.5` 等目录，再次运行直接从本地读取，不再联网。
+
+> 注意：只有**向量模型**需要这样下载。Chroma 向量数据库（`chromadb`）是个 Python 库，在 `pip install -r requirements.txt` 那步就装好了，**不需要单独下载**；它的数据运行时写到本地 `chroma_db/` 目录。
 
 ## 运行方式
 
@@ -49,10 +78,10 @@ env\Scripts\activate
 
 ### 2. 安装依赖
 
-安装运行所需依赖：
+一键安装运行所需的全部依赖（版本已在 `requirements.txt` 中锁定）：
 
 ```bash
-pip install fastembed chromadb numpy openai python-dotenv
+pip install -r requirements.txt
 ```
 
 ### 3. 配置大模型（仅 RAG 生成功能需要）
@@ -149,9 +178,62 @@ python embed_local.py
 python chroma_demo.py
 ```
 
+## 查看向量库里存了什么
+
+Chroma 的数据在 `chroma_db/` 目录，分两部分存：**文本/metadata 在 `chroma.sqlite3`**，**向量数值在子目录的 `.bin` 索引文件里**（二进制，读不了）。所以分两种方式看：
+
+### 方式一：看原文和 metadata（SQLite 客户端）
+
+用 DBeaver、DB Browser for SQLite 等工具打开 `chroma_db/chroma.sqlite3`。表很多，但真正存你数据的就 3 张，其余都是 Chroma 内部用的（索引、写日志、多租户、迁移记录等），不用管：
+
+- `collections` —— 你建的集合（名字、id、维度、距离配置）
+- `embeddings` —— 每条记录一行，内部 `id` 对应你的 `embedding_id`（如 doc1）
+- `embedding_metadata` —— 文档原文 + metadata，**原文存在 `key='chroma:document'` 的 `string_value` 里**
+
+把记录 id 和原文拼到一起看，在客户端里跑这条 SQL：
+
+```sql
+SELECT e.embedding_id AS doc_id,
+       m.string_value  AS document
+FROM embeddings e
+JOIN embedding_metadata m ON e.id = m.id
+WHERE m.key = 'chroma:document'
+ORDER BY e.embedding_id;
+```
+
+去掉 `WHERE` 就能看到 `root_cause`、`service` 等其它 metadata 字段（它们也在 `embedding_metadata`，只是 `key` 不同）。
+
+### 方式二：看向量数值（脚本）
+
+向量不在 sqlite 里，得走 Chroma 的 API 取。直接跑：
+
+```bash
+python inspect_chroma.py
+```
+
+会列出所有集合，并打印每条的原文、metadata 和向量预览（维度 + 前几维）。
+
+### 方式三：图形客户端（可选）
+
+Chroma server 是纯 API、没有自带网页，所以浏览器开 `http://localhost:8000/` 是 404 属正常。先把库跑成服务：
+
+```bash
+chroma run --path ./chroma_db --port 8000
+```
+
+想在浏览器里快速看集合列表，可直接访问接口（返回 JSON）：
+
+```
+http://localhost:8000/api/v2/tenants/default_tenant/databases/default_database/collections
+```
+
+要真正的可视化界面，可另起开源的 chromadb-admin 等前端连这个服务（注意第三方 UI 对 Chroma v2 API 的兼容性可能滞后，连不上时用方式一/二最稳）。
+
 ## 目录结构
 
 - `config.py` —— 共享配置：模型缓存目录、数据库路径、常用模型名、大模型接口配置（从 `.env` 读密钥）
+- `download_models.py` —— 一键把项目用到的全部向量模型下载到 `MODEL_DIR`
+- `inspect_chroma.py` —— 查看 Chroma 本地库存了什么（列出集合、打印每条的原文/metadata/向量预览）
 - `embed_local.py` —— 本地 all-MiniLM-L6-v2 向量化脚本
 - `chroma_demo.py` —— Chroma 向量数据库语义检索脚本
 - `alert_kb.py` —— 告警匹配知识库：匹配已知问题/自动入库（中文 bge 模型），含 `match_and_advise` 完整 RAG 入口
@@ -163,8 +245,9 @@ python chroma_demo.py
 - `explain_vectors.py` —— 原理演示：打印向量、距离、相似度的每一步数字
 - `tiny_finetune.py` —— 微调演示：纯 numpy 展示微调的 4 步循环
 - `backprop_demo.py` —— 反向传播演示：两层网络手写反向传播解 XOR
+- `requirements.txt` —— 项目依赖清单（`pip install -r requirements.txt` 一键安装）
 - `.env.example` —— 大模型接口配置示例（复制为 `.env` 填入真实密钥，`.env` 不提交）
-- `chroma_db/` —— Chroma 本地持久化数据（不提交）
+- `chroma_db/` —— Chroma 本地持久化数据（不提交）：`chroma.sqlite3` 存原文/id/metadata，子目录里的 `.bin` 是向量索引（二进制）。想看里面存了什么用 `python inspect_chroma.py`
 - `env/` —— 本地虚拟环境（不提交）
 
 ## 作者

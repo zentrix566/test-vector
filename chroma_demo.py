@@ -2,7 +2,7 @@
 
 流程：把几段文字存进 Chroma -> 输入一句话 -> 返回语义最接近的几条。
 
-向量化用 fastembed 的 all-MiniLM-L6-v2，模型统一缓存在 F:\\models，
+向量化用 fastembed 的 all-MiniLM-L6-v2，模型统一缓存在 MODEL_DIR（见 config.py），
 向量算好后显式喂给 Chroma（add/query 都传 embeddings）。
 
 数据持久化到本地 ./chroma_db 目录，重复运行不会重复入库（用 upsert）。

@@ -1,0 +1,17 @@
+# 向量化与检索：本地 ONNX 向量模型 + Chroma 向量数据库
+fastembed==0.8.0
+chromadb==1.5.9
+
+# 原理演示脚本（向量距离、微调、反向传播）用到的数值计算库
+numpy==2.5.0
+
+# RAG 生成环节：调用 OpenAI 兼容接口的大模型
+openai==2.43.0
+
+# 从 .env 读取运行时配置/密钥
+python-dotenv==1.2.2
+
+# 告警匹配 Web 服务（api.py）
+fastapi>=0.115.0
+uvicorn[standard]==0.49.0
+pydantic==2.13.4
