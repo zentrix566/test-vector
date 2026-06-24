@@ -9,7 +9,8 @@
 
 接口：
     GET  /         健康检查
-    POST /match    body: {"alert": "告警文本"}  ->  匹配结果
+    POST /match    body: {"alert": "告警文本"}  ->  仅检索匹配结果
+    POST /advise   body: {"alert": "告警文本"}  ->  检索 + 大模型生成处置建议（完整 RAG）
 交互式文档：http://127.0.0.1:8000/docs
 """
 
@@ -20,7 +21,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from alert_kb import match_alert, seed_knowledge_base
+from alert_kb import match_alert, match_and_advise, seed_knowledge_base
 
 
 @asynccontextmanager
@@ -61,3 +62,12 @@ def health():
 def match(item: AlertIn):
     """传入一条告警，返回命中已知问题（含处置办法）或判定为新问题。"""
     return match_alert(item.alert)
+
+
+@app.post("/advise")
+def advise(item: AlertIn):
+    """完整 RAG：检索知识库后再让大模型生成针对当前告警的定制化处置建议。
+
+    未配置 OPENAI_API_KEY 时自动降级，直接返回知识库里的原始处置办法。
+    """
+    return match_and_advise(item.alert)

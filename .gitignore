@@ -11,6 +11,9 @@ __pycache__/
 # 日志
 *.log
 
+# 环境变量 / 密钥（绝不提交，只提交 .env.example）
+.env
+
 # IDE / 编辑器
 .idea/
 .vscode/

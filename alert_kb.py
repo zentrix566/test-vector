@@ -155,6 +155,14 @@ def match_alert(raw_alert: str) -> dict:
     }
 
 
+def match_and_advise(raw_alert: str) -> dict:
+    """检索 + 生成的完整 RAG：先匹配知识库，再让大模型生成定制化处置建议。"""
+    from rag import generate_advice  # 延迟导入：仅 RAG 路径才依赖 openai
+
+    matched = match_alert(raw_alert)
+    return generate_advice(raw_alert, matched)
+
+
 def main():
     # 仅为演示可复现：先清空集合再重建（生产环境不要这样做）
     try:
@@ -182,6 +190,13 @@ def main():
         else:
             print(f"  🆕 新问题（最高相似度仅 {res['similarity']}，低于阈值 {SIMILARITY_THRESHOLD}）")
             print(f"     已存入知识库 [{res['new_id']}]，状态=待定位，待运维补充根因与处置办法")
+
+    # 完整 RAG 演示：检索 + 大模型生成（未配置密钥时自动降级为返回知识库原文）
+    print("\n" + "=" * 70)
+    print("【RAG 生成演示】检索命中后，让大模型生成针对性处置建议")
+    rag_res = match_and_advise("网关 192.168.1.5 大面积 502，后端没响应")
+    print(f"  来源: {rag_res['advice_source']}（llm=大模型生成 / knowledge_base=未配密钥降级）")
+    print(f"  建议:\n{rag_res['advice']}")
 
 
 if __name__ == "__main__":

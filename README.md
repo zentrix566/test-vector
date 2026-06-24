@@ -19,6 +19,7 @@
 - 向量化：基于 fastembed（底层 ONNX，无需 torch），用 `all-MiniLM-L6-v2` 离线生成 384 维向量
 - 检索：用 Chroma 向量数据库存入多段文字，输入查询返回语义最接近的若干条（默认模型同为 all-MiniLM-L6-v2）
 - 告警匹配：新告警在知识库里找最相似的已知问题，命中给出根因和处置办法，未命中自动入库（`alert_kb.py`，中文 bge 模型）
+- RAG 生成：在检索命中的基础上，把"已知问题+根因+处置办法"作为上下文喂给大模型，针对当前告警生成定制化处置建议（`rag.py`，OpenAI 兼容接口；未配密钥时自动降级返回知识库原文）
 - 原理演示：用纯 numpy 展示向量距离、模型微调、反向传播的内部机制
 
 ## 模型存放位置
@@ -51,10 +52,20 @@ env\Scripts\activate
 安装运行所需依赖：
 
 ```bash
-pip install fastembed chromadb numpy
+pip install fastembed chromadb numpy openai python-dotenv
 ```
 
-### 3. 运行
+### 3. 配置大模型（仅 RAG 生成功能需要）
+
+向量检索、告警匹配全程本地离线，无需任何密钥。只有"RAG 生成处置建议"这步要调用大模型。复制示例配置并填入自己的 key：
+
+```bash
+copy .env.example .env
+```
+
+然后编辑 `.env`，填入 `OPENAI_API_KEY`，按需修改 `OPENAI_BASE_URL` 和 `LLM_MODEL`（默认对接 DeepSeek，改一行 base_url 即可换通义/OpenAI 等任意 OpenAI 兼容厂商）。**不配密钥也能跑**：RAG 接口会自动降级，直接返回知识库里的原始处置办法。
+
+### 4. 运行
 
 本地向量化（首次运行会自动下载模型，约 80MB，之后完全离线）：
 
@@ -68,7 +79,7 @@ python embed_local.py
 python chroma_demo.py
 ```
 
-告警匹配知识库（新告警匹配已知问题，命中给处置办法，未命中自动入库）：
+告警匹配知识库（新告警匹配已知问题，命中给处置办法，未命中自动入库；末尾附带一段 RAG 生成演示）：
 
 ```bash
 python alert_kb.py
@@ -88,8 +99,16 @@ uvicorn api:app --host 127.0.0.1 --port 8000
 
 启动后访问交互式文档 http://127.0.0.1:8000/docs （Swagger UI 资源已本地化到 `static/`，国内可秒开），或直接调用接口：
 
+仅检索匹配（不调用大模型）：
+
 ```bash
 curl -X POST http://127.0.0.1:8000/match -H "Content-Type: application/json" -d "{\"alert\": \"网关大量 502 后端无响应\"}"
+```
+
+检索 + RAG 生成处置建议（需在 `.env` 配好大模型密钥；未配则降级返回知识库原文）：
+
+```bash
+curl -X POST http://127.0.0.1:8000/advise -H "Content-Type: application/json" -d "{\"alert\": \"网关大量 502 后端无响应\"}"
 ```
 
 原理演示（打印向量、距离、相似度的每一步数字）：
@@ -132,17 +151,19 @@ python chroma_demo.py
 
 ## 目录结构
 
-- `config.py` —— 共享配置：模型缓存目录、数据库路径、常用模型名
+- `config.py` —— 共享配置：模型缓存目录、数据库路径、常用模型名、大模型接口配置（从 `.env` 读密钥）
 - `embed_local.py` —— 本地 all-MiniLM-L6-v2 向量化脚本
 - `chroma_demo.py` —— Chroma 向量数据库语义检索脚本
-- `alert_kb.py` —— 告警匹配知识库：匹配已知问题/自动入库（中文 bge 模型）
-- `api.py` —— FastAPI Web 服务：POST /match 对外提供告警匹配接口
+- `alert_kb.py` —— 告警匹配知识库：匹配已知问题/自动入库（中文 bge 模型），含 `match_and_advise` 完整 RAG 入口
+- `rag.py` —— RAG 生成环节：把检索结果作为上下文，调用大模型生成定制化处置建议
+- `api.py` —— FastAPI Web 服务：POST /match 仅检索；POST /advise 检索+生成（完整 RAG）
 - `call_api.py` —— 调用 Web 服务的小客户端（测试 /match 接口）
 - `static/` —— Swagger UI 本地静态资源（让 /docs 离线可用）
 - `verify_model.py` —— 验证中文模型 bge-small-zh：打印路径、维度，做相似度自检
 - `explain_vectors.py` —— 原理演示：打印向量、距离、相似度的每一步数字
 - `tiny_finetune.py` —— 微调演示：纯 numpy 展示微调的 4 步循环
 - `backprop_demo.py` —— 反向传播演示：两层网络手写反向传播解 XOR
+- `.env.example` —— 大模型接口配置示例（复制为 `.env` 填入真实密钥，`.env` 不提交）
 - `chroma_db/` —— Chroma 本地持久化数据（不提交）
 - `env/` —— 本地虚拟环境（不提交）
 
