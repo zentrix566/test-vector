@@ -1,0 +1,20 @@
+# Python 虚拟环境
+env/
+
+# Chroma 本地持久化数据
+chroma_db/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# 日志
+*.log
+
+# IDE / 编辑器
+.idea/
+.vscode/
+
+# 操作系统文件
+Thumbs.db
+.DS_Store
