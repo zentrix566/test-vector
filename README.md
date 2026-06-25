@@ -234,6 +234,8 @@ http://localhost:8000/api/v2/tenants/default_tenant/databases/default_database/c
 - `config.py` —— 共享配置：模型缓存目录、数据库路径、常用模型名、大模型接口配置（从 `.env` 读密钥）
 - `download_models.py` —— 一键把项目用到的全部向量模型下载到 `MODEL_DIR`
 - `inspect_chroma.py` —— 查看 Chroma 本地库存了什么（列出集合、打印每条的原文/metadata/向量预览）
+- `inspect_model.py` —— 分词器 + ONNX 模型二合一查看工具：看清 文字 → token id → 向量 的完整链路，支持 `all/tokenizer/onnx` 三种模式，默认识别 `MODEL_DIR` 也可命令行指定路径
+- `embed_online.py` —— 在线向量模型调用：通过火山方舟 Embedding API 把文字转成向量，与本地模型互补，中文效果通常更好
 - `embed_local.py` —— 本地 all-MiniLM-L6-v2 向量化脚本
 - `chroma_demo.py` —— Chroma 向量数据库语义检索脚本
 - `alert_kb.py` —— 告警匹配知识库：匹配已知问题/自动入库（中文 bge 模型），含 `match_and_advise` 完整 RAG 入口

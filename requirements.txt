@@ -5,8 +5,17 @@ chromadb==1.5.9
 # 原理演示脚本（向量距离、微调、反向传播）用到的数值计算库
 numpy==2.5.0
 
+# 直接加载 .onnx 看接口/跑推理（inspect_model.py）；fastembed 内部也用它
+onnxruntime==1.27.0
+
+# 直接加载分词器看词表/切词（inspect_model.py）；fastembed 内部也用它
+tokenizers==0.23.1
+
 # RAG 生成环节：调用 OpenAI 兼容接口的大模型
 openai==2.43.0
+
+# 在线向量模型调用（embed_online.py）
+requests==2.32.4
 
 # 从 .env 读取运行时配置/密钥
 python-dotenv==1.2.2
